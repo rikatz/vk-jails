@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: testpod
+spec:
+  containers:
+  - image: busybox
+    name: testpod
+  nodeSelector:
+    beta.kubernetes.io/os: freebsd
