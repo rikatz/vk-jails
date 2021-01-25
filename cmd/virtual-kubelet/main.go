@@ -16,19 +16,14 @@ package main
 
 import (
 	"context"
-	"strings"
 
+	"github.com/rikatz/vk-jails/pkg/jails"
 	"github.com/sirupsen/logrus"
-	"github.com/virtual-kubelet/cri"
 	cli "github.com/virtual-kubelet/node-cli"
 	logruscli "github.com/virtual-kubelet/node-cli/logrus"
-	opencensuscli "github.com/virtual-kubelet/node-cli/opencensus"
-	"github.com/virtual-kubelet/node-cli/opts"
 	"github.com/virtual-kubelet/node-cli/provider"
 	"github.com/virtual-kubelet/virtual-kubelet/log"
 	logruslogger "github.com/virtual-kubelet/virtual-kubelet/log/logrus"
-	"github.com/virtual-kubelet/virtual-kubelet/trace"
-	"github.com/virtual-kubelet/virtual-kubelet/trace/opencensus"
 )
 
 var (
@@ -38,27 +33,13 @@ var (
 )
 
 func main() {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	ctx = cli.ContextWithCancelOnSignal(ctx)
+	ctx := cli.ContextWithCancelOnSignal(context.Background())
 
 	logger := logrus.StandardLogger()
 	log.L = logruslogger.FromLogrus(logrus.NewEntry(logger))
 	logConfig := &logruscli.Config{LogLevel: "info"}
 
-	trace.T = opencensus.Adapter{}
-	traceConfig := opencensuscli.Config{
-		AvailableExporters: map[string]opencensuscli.ExporterInitFunc{
-			"ocagent": initOCAgent,
-		},
-	}
-
-	o := opts.New()
-	o.Provider = "jails"
-	o.Version = strings.Join([]string{k8sVersion, "vk-jails", buildVersion}, "-")
 	node, err := cli.New(ctx,
-		cli.WithBaseOpts(o),
-		cli.WithCLIVersion(buildVersion, buildTime),
 		cli.WithProvider("jails", func(cfg provider.InitConfig) (provider.Provider, error) {
 			return jails.NewJailsProvider(cfg.ConfigPath, cfg.NodeName, cfg.OperatingSystem, cfg.InternalIP, cfg.DaemonPort)
 		}),
@@ -66,16 +47,12 @@ func main() {
 		cli.WithPersistentPreRunCallback(func() error {
 			return logruscli.Configure(logConfig, logger)
 		}),
-		cli.WithPersistentFlags(traceConfig.FlagSet()),
-		cli.WithPersistentPreRunCallback(func() error {
-			return opencensuscli.Configure(ctx, &traceConfig, o)
-		}),
 	)
 	if err != nil {
 		log.G(ctx).Fatal(err)
 	}
 
-	if err := node.Run(); err != nil {
+	if err := node.Run(ctx); err != nil {
 		log.G(ctx).Fatal(err)
 	}
 }
